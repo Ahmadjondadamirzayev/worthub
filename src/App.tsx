@@ -1,37 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { GermanFlagBackdrop } from './components/GermanFlagBackdrop';
-import { LoginView } from './components/LoginView';
+import { UserAccount, WordItem, StudentApplication } from './types/german';
+import { DEFAULT_USERS, DEFAULT_LESSONS, DEFAULT_WORDS } from './data/defaultGermanData';
 import { TopNav } from './components/TopNav';
 import { LektionenView } from './components/LektionenView';
 import { GamesHubView } from './components/GamesHubView';
 import { LeaderboardView } from './components/LeaderboardView';
+import { LoginView } from './components/LoginView';
 import { AdminPanelModal } from './components/AdminPanelModal';
 import { AddWordModal } from './components/AddWordModal';
 import { TextFileImportModal } from './components/TextFileImportModal';
-import {
-  DEFAULT_USERS,
-  DEFAULT_LESSONS,
-  DEFAULT_WORDS,
-  DEFAULT_SESSIONS,
-  DEFAULT_APPLICATIONS,
-} from './data/defaultGermanData';
-import {
-  UserAccount,
-  VocabularyLesson,
-  WordItem,
-  CefrLevel,
-  UserSessionLog,
-  StudentApplication,
-} from './types/german';
+import { InstallAppModal } from './components/InstallAppModal';
+import { GermanFlagBackdrop } from './components/GermanFlagBackdrop';
+import { CheckCircle2, X } from 'lucide-react';
 
-const USERS_STORAGE_KEY = 'worthub_users_v5';
-const LESSONS_STORAGE_KEY = 'worthub_lessons_v5';
-const WORDS_STORAGE_KEY = 'worthub_words_v5';
-const AUTH_STORAGE_KEY = 'worthub_auth_v5';
-const SESSIONS_STORAGE_KEY = 'worthub_sessions_v5';
-const APPS_STORAGE_KEY = 'worthub_apps_v5';
+const USERS_STORAGE_KEY = 'worthub_german_users_v2';
+const LESSONS_STORAGE_KEY = 'worthub_german_lessons_v2';
+const WORDS_STORAGE_KEY = 'worthub_german_words_v2';
+const CURRENT_USER_KEY = 'worthub_german_current_user_v2';
+const APPLICATIONS_KEY = 'worthub_german_applications_v2';
 
-export default function App() {
+export const App: React.FC = () => {
   // Users state
   const [users, setUsers] = useState<UserAccount[]>(() => {
     try {
@@ -44,7 +32,7 @@ export default function App() {
   });
 
   // Lessons state
-  const [lessons, setLessons] = useState<VocabularyLesson[]>(() => {
+  const [lessons, setLessons] = useState(() => {
     try {
       const stored = localStorage.getItem(LESSONS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
@@ -65,33 +53,26 @@ export default function App() {
     return DEFAULT_WORDS;
   });
 
-  // Sessions state
-  const [sessions, setSessions] = useState<UserSessionLog[]>(() => {
-    try {
-      const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      // ignore
-    }
-    return DEFAULT_SESSIONS;
-  });
-
-  // Student Applications state
+  // Applications state
   const [applications, setApplications] = useState<StudentApplication[]>(() => {
     try {
-      const stored = localStorage.getItem(APPS_STORAGE_KEY);
+      const stored = localStorage.getItem(APPLICATIONS_KEY);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       // ignore
     }
-    return DEFAULT_APPLICATIONS;
+    return [];
   });
 
-  // Active user session (Admin ahmadjon by default for instant control)
+  // Current logged in user
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      const stored = localStorage.getItem(CURRENT_USER_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const exists = DEFAULT_USERS.find((u) => u.id === parsed.id);
+        if (exists) return parsed;
+      }
     } catch (e) {
       // ignore
     }
@@ -101,12 +82,28 @@ export default function App() {
   // Navigation tab: 'lektionen' | 'games' | 'leaderboard'
   const [currentTab, setCurrentTab] = useState<'lektionen' | 'games' | 'leaderboard'>('lektionen');
 
-  // Modals state
+  // Permanent Dark Mode (Qora rejim har doim yoqilgan)
+  const theme = 'dark' as const;
+
+  // Modals & Notifications state
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isAddWordOpen, setIsAddWordOpen] = useState(false);
   const [modalDefaultLessonId, setModalDefaultLessonId] = useState<string | undefined>(undefined);
   const [editingWord, setEditingWord] = useState<WordItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [toastNotification, setToastNotification] = useState<{ title: string; message: string } | null>(null);
+
+  // Sync dark theme to HTML root
+  useEffect(() => {
+    try {
+      localStorage.setItem('worthub_german_theme_v2', 'dark');
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   // Sync state to localStorage
   useEffect(() => {
@@ -135,15 +132,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [sessions]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(applications));
+      localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(applications));
     } catch (e) {
       console.error(e);
     }
@@ -152,9 +141,9 @@ export default function App() {
   useEffect(() => {
     try {
       if (currentUser) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
       } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        localStorage.removeItem(CURRENT_USER_KEY);
       }
     } catch (e) {
       console.error(e);
@@ -164,233 +153,211 @@ export default function App() {
   // Auth Handlers
   const handleLogin = (user: UserAccount) => {
     setCurrentUser(user);
-    // Log session
-    const newSession: UserSessionLog = {
-      id: `ses-${Date.now()}`,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      loginTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      ipOrDevice: navigator.userAgent.includes('Mobile') ? 'Mobil qurilma' : 'Chrome (Desktop)',
-    };
-    setSessions((prev) => [newSession, ...prev.slice(0, 20)]);
-    setCurrentTab('lektionen');
+    setToastNotification({
+      title: 'Hush kelibsiz!',
+      message: `${user.name} (${user.role === 'admin' ? "O'qituvchi" : "O'quvchi"}) sifatida kirdingiz.`,
+    });
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
   };
 
-  // User Management (CRITICAL: "odamlarni o'chirish ishlasin")
-  const handleDeleteStudent = (userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-
-    // If currently logged-in user was deleted, fallback to admin
-    if (currentUser && currentUser.id === userId) {
-      setCurrentUser(users.find((u) => u.role === 'admin') || DEFAULT_USERS[0]);
-    }
-  };
-
-  const handleCreateStudent = (
-    newStudentData: Omit<UserAccount, 'id' | 'createdAt' | 'lastActive'>
-  ) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const newStudent: UserAccount = {
-      ...newStudentData,
-      id: `usr-${Date.now()}`,
-      createdAt: today,
-      lastActive: today,
-      xp: 0,
-      streakDays: 0,
-      wordsCount: 0,
-    };
-    setUsers((prev) => [...prev, newStudent]);
-  };
-
-  const handleUpdateStudent = (id: string, updates: Partial<UserAccount>) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
-    );
-    if (currentUser && currentUser.id === id) {
-      setCurrentUser((prev) => (prev ? { ...prev, ...updates } : null));
-    }
-  };
-
-  // Application Handlers
   const handleSubmitApplication = (appData: Omit<StudentApplication, 'id' | 'status' | 'submittedAt'>) => {
     const newApp: StudentApplication = {
       ...appData,
-      id: `app-${Date.now()}`,
+      id: 'app-' + Date.now(),
       status: 'pending',
-      submittedAt: new Date().toISOString().slice(0, 10),
+      submittedAt: new Date().toISOString(),
     };
     setApplications((prev) => [newApp, ...prev]);
   };
 
   const handleApproveApplication = (app: StudentApplication) => {
-    // Generate clean student login & password
-    const autoUsername = app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + Math.floor(Math.random() * 90 + 10);
-    const autoPassword = 'wort' + Math.floor(Math.random() * 900 + 100);
+    const baseUsername = app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'student';
+    let uniqueUser = baseUsername;
+    let count = 1;
+    while (users.some((u) => u.username === uniqueUser)) {
+      uniqueUser = `${baseUsername}${count}`;
+      count++;
+    }
 
-    handleCreateStudent({
+    const generatedPassword = Math.random().toString(36).slice(-6) + '12';
+
+    const newUser: UserAccount = {
+      id: 'user-' + Date.now(),
       name: app.name,
+      username: uniqueUser,
+      password: generatedPassword,
       phone: app.phone,
-      username: autoUsername,
-      password: autoPassword,
       role: 'student',
-      assignedLevel: app.level,
-      isActive: true,
-    });
-
-    // Remove application
-    setApplications((prev) => prev.filter((a) => a.id !== app.id));
-    alert(`O'quvchi ro'yxatga olindi!\nLogin: ${autoUsername}\nParol: ${autoPassword}`);
-  };
-
-  // Lesson Handlers ("mavzuni men qo'shay harbir lektionnikini")
-  const handleUpdateLesson = (id: string, updates: Partial<VocabularyLesson>) => {
-    setLessons((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
-    );
-  };
-
-  const handleCreateLesson = (
-    title: string,
-    themeTopic: string,
-    level: CefrLevel
-  ) => {
-    const nextNum = lessons.length + 1;
-    const newLesson: VocabularyLesson = {
-      id: `lek-${Date.now()}`,
-      lektionNumber: nextNum,
-      title: title || `Lektion ${nextNum}: ${themeTopic}`,
-      themeTopic,
-      level,
-      isActive: true,
-      createdAt: new Date().toISOString().slice(0, 10),
+      level: app.level,
+      points: 50,
+      createdAt: new Date().toISOString(),
     };
-    setLessons((prev) => [...prev, newLesson]);
-  };
 
-  const handleDeleteLesson = (id: string) => {
-    setLessons((prev) => prev.filter((l) => l.id !== id));
-    setWords((prev) => prev.filter((w) => w.setId !== id));
-  };
-
-  // Word Handlers
-  const handleSaveWord = (word: WordItem) => {
-    setWords((prev) => {
-      const exists = prev.some((w) => w.id === word.id);
-      if (exists) {
-        return prev.map((w) => (w.id === word.id ? word : w));
-      }
-      return [word, ...prev];
+    setUsers((prev) => [...prev, newUser]);
+    setApplications((prev) => prev.filter((a) => a.id !== app.id));
+    setToastNotification({
+      title: 'O\'quvchi qabul qilindi!',
+      message: `Login: ${uniqueUser} | Parol: ${generatedPassword}`,
     });
   };
 
-  const handleDeleteWord = (id: string) => {
-    setWords((prev) => prev.filter((w) => w.id !== id));
+  const handleSaveWord = (wordData: Omit<WordItem, 'id'>, editId?: string) => {
+    if (editId) {
+      setWords((prev) => prev.map((w) => (w.id === editId ? { ...wordData, id: editId } : w)));
+      setToastNotification({
+        title: 'Muvaffaqiyatli saqlandi',
+        message: `"${wordData.german}" so'zi yangilandi.`,
+      });
+    } else {
+      const newWord: WordItem = {
+        ...wordData,
+        id: 'word-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      };
+      setWords((prev) => [...prev, newWord]);
+      setToastNotification({
+        title: 'Yangi so\'z qo\'shildi',
+        message: `"${wordData.german}" lug'atga qo'shildi.`,
+      });
+    }
+    setIsAddWordOpen(false);
+    setEditingWord(null);
   };
 
-  const handleToggleWordActive = (id: string) => {
-    setWords((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, isActive: w.isActive === false ? true : false } : w))
-    );
+  const handleDeleteWord = (wordId: string) => {
+    setWords((prev) => prev.filter((w) => w.id !== wordId));
+    setToastNotification({
+      title: 'O\'chirildi',
+      message: 'So\'z muvaffaqiyatli o\'chirildi.',
+    });
   };
 
-  const handleImportWords = (newWords: WordItem[]) => {
-    setWords((prev) => [...newWords, ...prev]);
+  const handleImportWords = (newWords: Omit<WordItem, 'id'>[], targetLessonId: string) => {
+    const createdWords: WordItem[] = newWords.map((w, index) => ({
+      ...w,
+      id: `imported-${Date.now()}-${index}`,
+      lessonId: targetLessonId,
+    }));
+    setWords((prev) => [...prev, ...createdWords]);
+    setToastNotification({
+      title: 'Import muvaffaqiyatli!',
+      message: `${createdWords.length} ta yangi so'z darsga qo'shildi.`,
+    });
+    setIsImportModalOpen(false);
   };
 
-  // Unauthenticated screen matching Screenshot 2
   if (!currentUser) {
     return (
       <LoginView
         users={users}
         onLogin={handleLogin}
         onSubmitApplication={handleSubmitApplication}
+        theme="dark"
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-[#07090f] text-slate-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-300 relative">
-      {/* German Flag Theme Atmospheric Backdrop */}
-      <GermanFlagBackdrop />
+      <GermanFlagBackdrop theme="dark" />
 
-      {/* Top Bar matching Screenshot 1, 3, 4, 5 */}
+      {toastNotification && (
+        <div className="fixed top-16 right-4 sm:right-6 z-50 max-w-sm rounded-2xl bg-emerald-600 text-white shadow-2xl p-4 border border-emerald-400 flex items-start gap-3 animate-bounce">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <div className="font-bold">{toastNotification.title}</div>
+            <div className="mt-0.5 opacity-90 font-mono">{toastNotification.message}</div>
+          </div>
+          <button
+            onClick={() => setToastNotification(null)}
+            className="p-1 hover:bg-emerald-700 rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <TopNav
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
         currentUser={currentUser}
+        theme="dark"
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
+        onOpenInstallApp={() => setIsInstallModalOpen(true)}
         onLogout={handleLogout}
       />
 
-      {/* Main Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* TAB 1: Lektionlar To'plami matching Screenshot 3 */}
         {currentTab === 'lektionen' && (
           <LektionenView
             lessons={lessons}
             words={words}
             currentUser={currentUser}
-            onUpdateLesson={handleUpdateLesson}
-            onCreateLesson={handleCreateLesson}
-            onDeleteLesson={handleDeleteLesson}
-            onSaveWord={handleSaveWord}
-            onDeleteWord={handleDeleteWord}
-            onToggleWordActive={handleToggleWordActive}
-            onOpenAddWord={(defaultId) => {
+            onOpenAddWord={(lessonId) => {
+              setModalDefaultLessonId(lessonId);
               setEditingWord(null);
-              setModalDefaultLessonId(defaultId);
               setIsAddWordOpen(true);
             }}
-            onOpenImport={(defaultId) => {
-              setModalDefaultLessonId(defaultId);
+            onEditWord={(word) => {
+              setEditingWord(word);
+              setModalDefaultLessonId(word.lessonId);
+              setIsAddWordOpen(true);
+            }}
+            onDeleteWord={handleDeleteWord}
+            onOpenImportModal={(lessonId) => {
+              setModalDefaultLessonId(lessonId);
               setIsImportModalOpen(true);
             }}
           />
         )}
 
-        {/* TAB 2: O'yinlar & Grammatika matching Screenshot 4 */}
         {currentTab === 'games' && (
           <GamesHubView
             words={words}
-            lessons={lessons}
+            currentUser={currentUser}
+            onUpdateScore={(addedPoints) => {
+              if (!currentUser) return;
+              const newPoints = (currentUser.points || 0) + addedPoints;
+              const updatedUser = { ...currentUser, points: newPoints };
+              setCurrentUser(updatedUser);
+              setUsers((prev) => prev.map((u) => (u.id === currentUser.id ? updatedUser : u)));
+            }}
           />
         )}
 
-        {/* TAB 3: O'quvchilar reytingi matching Screenshot 5 */}
         {currentTab === 'leaderboard' && (
-          <LeaderboardView
-            users={users}
-            onOpenAddStudent={() => setIsAdminPanelOpen(true)}
-            onGoToGames={() => setCurrentTab('games')}
-          />
+          <LeaderboardView users={users} currentUser={currentUser} />
         )}
       </main>
 
-      {/* Modal 1: O'qituvchi Boshqaruv Paneli matching Screenshot 6 */}
       <AdminPanelModal
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
         users={users}
-        lessons={lessons}
-        sessions={sessions}
-        applications={applications}
-        onCreateStudent={handleCreateStudent}
-        onDeleteStudent={handleDeleteStudent}
-        onUpdateStudent={handleUpdateStudent}
+        theme="dark"
+        onAddUser={(newUser) => {
+          setUsers((prev) => [...prev, newUser]);
+          setToastNotification({
+            title: 'Yangi foydalanuvchi yaratildi',
+            message: `Login: ${newUser.username} | Parol: ${newUser.password}`,
+          });
+        }}
+        onDeleteUser={(userId) => {
+          setUsers((prev) => prev.filter((u) => u.id !== userId));
+        }}
+        onUpdateUser={(updatedUser) => {
+          setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+        }}
         onOpenAddWord={() => {
           setEditingWord(null);
           setIsAddWordOpen(true);
         }}
-        onOpenImport={() => setIsImportModalOpen(true)}
+        applications={applications}
         onApproveApplication={handleApproveApplication}
       />
 
-      {/* Modal 2: So'z qo'shish */}
       <AddWordModal
         isOpen={isAddWordOpen}
         onClose={() => {
@@ -398,42 +365,26 @@ export default function App() {
           setEditingWord(null);
         }}
         lessons={lessons}
-        defaultLessonId={modalDefaultLessonId || lessons[0]?.id}
+        defaultLessonId={modalDefaultLessonId}
         editingWord={editingWord}
-        currentUser={currentUser}
+        theme="dark"
         onSaveWord={handleSaveWord}
-        onOpenImport={() => {
-          setIsAddWordOpen(false);
-          setIsImportModalOpen(true);
-        }}
       />
 
-      {/* Modal 3: Matndan import qilish (Shu joytida) */}
       <TextFileImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         lessons={lessons}
-        defaultLessonId={modalDefaultLessonId || lessons[0]?.id}
-        currentUser={currentUser}
+        defaultLessonId={modalDefaultLessonId}
+        theme="dark"
         onImportWords={handleImportWords}
       />
 
-      {/* Footer in Uzbek */}
-      <footer className="relative z-10 border-t border-slate-800/80 bg-[#0a0d14]/90 py-5 px-4 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">worthub.uz</span>
-            <span aria-hidden="true">·</span>
-            <span>Nemis tili so'z boyligi va interaktiv o'yinlar portali</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-[11px] font-mono">
-            <span>
-              Foydalanuvchi: <strong className="text-slate-300">{currentUser.name}</strong> ({currentUser.role === 'admin' ? "O'qituvchi" : `Daraja: ${currentUser.assignedLevel}`})
-            </span>
-          </div>
-        </div>
-      </footer>
+      <InstallAppModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+        theme="dark"
+      />
     </div>
   );
-}
+};
