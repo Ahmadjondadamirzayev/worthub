@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Sparkles,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import {
   WordItem,
@@ -18,6 +19,7 @@ import {
 } from '../types/german';
 import { ARTICLE_COLORS } from '../utils/germanGrammar';
 import { WorthubLogo } from './WorthubLogo';
+import { extractTextFromPdf } from '../utils/pdfExtractor';
 
 interface TextFileImportModalProps {
   isOpen: boolean;
@@ -57,123 +59,105 @@ export const TextFileImportModal: React.FC<TextFileImportModalProps> = ({
   const [defaultLevel, setDefaultLevel] = useState<CefrLevel>('A1');
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [errorLines, setErrorLines] = useState<number>(0);
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
 
   if (!isOpen) return null;
 
-  // Auto-parse text when input changes
+  // Auto-parse text when input changes or after PDF extraction
   const handleParseText = (text: string) => {
     setInputText(text);
-    const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0 && !l.startsWith('#'));
+    const lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('#'));
 
     const rows: ParsedRow[] = [];
     let errors = 0;
 
     lines.forEach((line) => {
-      // Try semicolon, hyphen, slash, or tab
+      // 1. Check tab separation (\t) first
       let parts: string[] = [];
-      if (line.includes(';')) {
-        parts = line.split(';').map((p) => p.trim());
+      if (line.includes('\t')) {
+        parts = line.split('\t').map((p) => p.trim()).filter(Boolean);
+      } else if (line.includes(' | ')) {
+        parts = line.split(' | ').map((p) => p.trim()).filter(Boolean);
+      } else if (line.includes(';')) {
+        parts = line.split(';').map((p) => p.trim()).filter(Boolean);
       } else if (line.includes(' - ')) {
-        parts = line.split(' - ').map((p) => p.trim());
-      } else if (line.includes('/')) {
-        parts = line.split('/').map((p) => p.trim());
-      } else if (line.includes('\t')) {
-        parts = line.split('\t').map((p) => p.trim());
-      } else if (line.includes(',')) {
-        parts = line.split(',').map((p) => p.trim());
+        parts = line.split(' - ').map((p) => p.trim()).filter(Boolean);
+      } else if (line.includes(' — ')) {
+        parts = line.split(' — ').map((p) => p.trim()).filter(Boolean);
+      } else if (line.includes(': ')) {
+        parts = line.split(': ').map((p) => p.trim()).filter(Boolean);
       } else {
-        // Space separated fallback: article word - uzbek
-        const match = line.match(/^(der|die|das)?\s*([^\-]+)\s*[\-:]\s*(.+)$/i);
-        if (match) {
-          parts = [match[1] || 'none', match[2].trim(), match[3].trim()];
+        // Try multiple consecutive spaces (table layout)
+        const multiSpace = line.split(/\s{2,}/).map((p) => p.trim()).filter(Boolean);
+        if (multiSpace.length >= 2) {
+          parts = multiSpace;
+        } else {
+          // Fallback: match German article + word + rest
+          const match = line.match(/^(der|die|das)\s+([^\s]+)\s+(.+)$/i);
+          if (match) {
+            parts = [`${match[1]} ${match[2]}`, match[3].trim()];
+          } else {
+            // Space separated two parts
+            const spaceIdx = line.indexOf(' ');
+            if (spaceIdx > 0) {
+              parts = [line.slice(0, spaceIdx).trim(), line.slice(spaceIdx + 1).trim()];
+            } else {
+              parts = [line, ''];
+            }
+          }
         }
       }
 
-      if (parts.length >= 2) {
+      if (parts.length >= 1 && parts[0]) {
         let article: GermanArticle = 'none';
-        let german = '';
-        let uzbek = '';
+        let rawGerman = parts[0];
+        let uzbek = parts.slice(1).join(' / ').trim();
         let plural: string | undefined = undefined;
         let level: CefrLevel = defaultLevel;
-        let partOfSpeech: PartOfSpeech = 'noun';
-        let exampleDe: string | undefined = undefined;
-        let exampleUz: string | undefined = undefined;
+        let partOfSpeech: PartOfSpeech = 'phrase';
 
-        // Check if first part contains article, e.g. "der Apfel"
-        const firstToken = parts[0];
-        const lowerFirst = firstToken.toLowerCase();
-
-        if (lowerFirst.startsWith('der ')) {
-          article = 'der';
-          german = firstToken.slice(4).trim();
-          uzbek = parts[1];
-          if (parts[2]) plural = parts[2];
-          if (parts[3] && ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(parts[3].toUpperCase())) {
-            level = parts[3].toUpperCase() as CefrLevel;
-          }
-        } else if (lowerFirst.startsWith('die ')) {
-          article = 'die';
-          german = firstToken.slice(4).trim();
-          uzbek = parts[1];
-          if (parts[2]) plural = parts[2];
-          if (parts[3] && ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(parts[3].toUpperCase())) {
-            level = parts[3].toUpperCase() as CefrLevel;
-          }
-        } else if (lowerFirst.startsWith('das ')) {
-          article = 'das';
-          german = firstToken.slice(4).trim();
-          uzbek = parts[1];
-          if (parts[2]) plural = parts[2];
-          if (parts[3] && ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(parts[3].toUpperCase())) {
-            level = parts[3].toUpperCase() as CefrLevel;
-          }
-        } else if (['der', 'die', 'das', 'none'].includes(lowerFirst)) {
-          // Format: article; word; uzbek; plural
-          article = lowerFirst as GermanArticle;
-          german = parts[1];
-          uzbek = parts[2] || '';
-          plural = parts[3];
-          if (parts[4] && ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(parts[4].toUpperCase())) {
-            level = parts[4].toUpperCase() as CefrLevel;
-          }
-        } else {
-          // No explicit leading article
-          german = parts[0];
-          uzbek = parts[1];
-          if (parts[2] && ['der', 'die', 'das', 'none'].includes(parts[2].toLowerCase())) {
-            article = parts[2].toLowerCase() as GermanArticle;
-          }
-          if (parts[3]) plural = parts[3];
-          if (parts[4] && ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(parts[4].toUpperCase())) {
-            level = parts[4].toUpperCase() as CefrLevel;
-          }
-        }
-
-        // Detect part of speech
-        if (article !== 'none') {
+        // Check article in rawGerman
+        const mArt = rawGerman.match(/^(der|die|das)\s+(.*)$/i);
+        if (mArt) {
+          article = mArt[1].toLowerCase() as GermanArticle;
+          let rest = mArt[2].trim();
           partOfSpeech = 'noun';
-        } else if (german.endsWith('en') || german.endsWith('eln') || german.endsWith('ern')) {
-          partOfSpeech = 'verb';
-        } else if (german.includes(' ')) {
-          partOfSpeech = 'phrase';
+
+          // Extract plural notation like ", -e", ", ¨-er", ", -n", ", -s"
+          const mPl = rest.match(/,\s*([¨\-\w/]+)\s*$/);
+          if (mPl) {
+            plural = mPl[1];
+            rest = rest.replace(/,\s*([¨\-\w/]+)\s*$/, '').trim();
+          }
+          rawGerman = rest;
+        } else if (rawGerman.match(/^(der|die|das)$/i) && parts[1]) {
+          article = rawGerman.toLowerCase() as GermanArticle;
+          rawGerman = parts[1];
+          uzbek = parts.slice(2).join(' / ').trim();
+          partOfSpeech = 'noun';
         } else {
-          partOfSpeech = 'adjective';
+          // Check part of speech
+          if (rawGerman.endsWith('en') && !rawGerman.includes(' ')) {
+            partOfSpeech = 'verb';
+          } else if (rawGerman.includes(' ')) {
+            partOfSpeech = 'phrase';
+          } else {
+            partOfSpeech = 'adjective';
+          }
         }
 
-        if (german && uzbek) {
-          rows.push({
-            german,
-            article,
-            uzbek,
-            plural,
-            partOfSpeech,
-            level,
-            exampleDe,
-            exampleUz,
-          });
-        } else {
-          errors++;
-        }
+        // Even if uzbek is empty, accept it!
+        rows.push({
+          german: rawGerman,
+          article,
+          uzbek: uzbek || 'Tarjima kiritilmagan',
+          plural,
+          partOfSpeech,
+          level,
+        });
       } else {
         errors++;
       }
@@ -183,18 +167,30 @@ export const TextFileImportModal: React.FC<TextFileImportModalProps> = ({
     setErrorLines(errors);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        handleParseText(content);
+    if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
+      setIsExtractingPdf(true);
+      try {
+        const text = await extractTextFromPdf(file);
+        handleParseText(text);
+      } catch (err) {
+        console.error('PDF error:', err);
+      } finally {
+        setIsExtractingPdf(false);
       }
-    };
-    reader.readAsText(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        if (content) {
+          handleParseText(content);
+        }
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleLoadSample = () => {
@@ -253,10 +249,10 @@ die Nachhaltigkeit - barqarorlik - C1`;
             <WorthubLogo size="sm" variant="mark-only" theme={theme} />
             <div>
               <h2 className={`text-base font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Matnli fayldan so'zlarni yuklash (Text File Import)
+                Matnli / PDF fayldan so'zlarni yuklash (Import)
               </h2>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                Matnli faylni (.txt, .csv) yuklang yoki matnni to'g'ridan-to'g'ri joylashtiring
+                PDF yoki matnli faylni (.pdf, .txt, .csv) yuklang yoki matnni joylashtiring
               </p>
             </div>
           </div>
@@ -325,12 +321,17 @@ die Nachhaltigkeit - barqarorlik - C1`;
                 ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
             }`}>
-              <FileText className="w-3.5 h-3.5 text-amber-500" />
-              <span>.txt / .csv faylni tanlash</span>
+              {isExtractingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+              ) : (
+                <FileText className="w-3.5 h-3.5 text-amber-500" />
+              )}
+              <span>{isExtractingPdf ? "PDF o'qilmoqda..." : ".pdf / .txt / .csv faylni tanlash"}</span>
               <input
                 type="file"
-                accept=".txt,.csv"
+                accept=".pdf,.txt,.csv,application/pdf"
                 onChange={handleFileUpload}
+                disabled={isExtractingPdf}
                 className="hidden"
               />
             </label>
@@ -349,7 +350,7 @@ die Nachhaltigkeit - barqarorlik - C1`;
           {/* Text Area */}
           <div>
             <label className={`block font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-              Matnni shu yerga joylashtiring (har bir qatorda: nemischa - o'zbekcha):
+              Matnni shu yerga joylashtiring:
             </label>
             <textarea
               rows={5}
