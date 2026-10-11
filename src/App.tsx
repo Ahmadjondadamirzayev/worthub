@@ -27,13 +27,13 @@ import {
   StudentApplication,
 } from './types/german';
 
-const USERS_STORAGE_KEY = 'worthub_users_v5';
-const LESSONS_STORAGE_KEY = 'worthub_lessons_v5';
-const WORDS_STORAGE_KEY = 'worthub_words_v5';
-const AUTH_STORAGE_KEY = 'worthub_auth_v5';
-const SESSIONS_STORAGE_KEY = 'worthub_sessions_v5';
-const APPS_STORAGE_KEY = 'worthub_apps_v5';
-const THEME_STORAGE_KEY = 'worthub_theme_v5';
+const USERS_STORAGE_KEY = 'worthub_users_v6';
+const LESSONS_STORAGE_KEY = 'worthub_lessons_v6';
+const WORDS_STORAGE_KEY = 'worthub_words_v6';
+const AUTH_STORAGE_KEY = 'worthub_auth_v6';
+const SESSIONS_STORAGE_KEY = 'worthub_sessions_v6';
+const APPS_STORAGE_KEY = 'worthub_apps_v6';
+const THEME_STORAGE_KEY = 'worthub_theme_v6';
 
 export default function App() {
   // Users state
@@ -47,22 +47,28 @@ export default function App() {
     return DEFAULT_USERS;
   });
 
-  // Lessons state
+  // Lessons state - ensure full 20 lessons from Blitz Nemis Tili Markazi
   const [lessons, setLessons] = useState<VocabularyLesson[]>(() => {
     try {
       const stored = localStorage.getItem(LESSONS_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length >= 20) return parsed;
+      }
     } catch (e) {
       console.error(e);
     }
     return DEFAULT_LESSONS;
   });
 
-  // Words state
+  // Words state - ensure full vocabulary database
   const [words, setWords] = useState<WordItem[]>(() => {
     try {
       const stored = localStorage.getItem(WORDS_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length >= 100) return parsed;
+      }
     } catch (e) {
       console.error(e);
     }
@@ -105,7 +111,7 @@ export default function App() {
   // Navigation tab: 'lektionen' | 'games' | 'leaderboard'
   const [currentTab, setCurrentTab] = useState<'lektionen' | 'games' | 'leaderboard'>('lektionen');
 
-  // Permanent Dark Mode (Qora rejim har doim yoqilgan)
+  // Permanent Dark Mode
   const theme = 'dark' as const;
 
   // Modals & Notifications state
@@ -184,7 +190,6 @@ export default function App() {
   // Auth Handlers
   const handleLogin = (user: UserAccount) => {
     setCurrentUser(user);
-    // Log session
     const newSession: UserSessionLog = {
       id: `ses-${Date.now()}`,
       username: user.username,
@@ -201,11 +206,9 @@ export default function App() {
     setCurrentUser(null);
   };
 
-  // User Management (CRITICAL: "odamlarni o'chirish ishlasin")
+  // User Management
   const handleDeleteStudent = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
-
-    // If currently logged-in user was deleted, fallback to admin
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(users.find((u) => u.role === 'admin') || DEFAULT_USERS[0]);
     }
@@ -248,7 +251,6 @@ export default function App() {
   };
 
   const handleApproveApplication = (app: StudentApplication) => {
-    // Generate clean student login & password
     const autoUsername = app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + Math.floor(Math.random() * 90 + 10);
     const autoPassword = 'wort' + Math.floor(Math.random() * 900 + 100);
 
@@ -262,7 +264,6 @@ export default function App() {
       isActive: true,
     });
 
-    // Remove application and show notification (no window.alert!)
     setApplications((prev) => prev.filter((a) => a.id !== app.id));
     setToastNotification({
       title: "O'quvchi ro'yxatga olindi!",
@@ -271,7 +272,7 @@ export default function App() {
     setTimeout(() => setToastNotification(null), 7000);
   };
 
-  // Lesson Handlers ("mavzuni men qo'shay harbir lektionnikini")
+  // Lesson Handlers
   const handleUpdateLesson = (id: string, updates: Partial<VocabularyLesson>) => {
     setLessons((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
@@ -326,7 +327,6 @@ export default function App() {
     setWords((prev) => [...newWords, ...prev]);
   };
 
-  // Unauthenticated screen matching Screenshot 2
   if (!currentUser) {
     return (
       <LoginView
@@ -340,10 +340,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#07090f] text-slate-100 flex flex-col font-sans selection:bg-amber-500/20 selection:text-amber-300 relative">
-      {/* German Flag Theme Atmospheric Backdrop */}
       <GermanFlagBackdrop theme="dark" />
 
-      {/* In-app Toast Notification */}
       {toastNotification && (
         <div className="fixed top-16 right-4 sm:right-6 z-50 max-w-sm rounded-2xl bg-emerald-600 text-white shadow-2xl p-4 border border-emerald-400 flex items-start gap-3 animate-bounce">
           <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
@@ -360,7 +358,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Bar */}
       <TopNav
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
@@ -371,9 +368,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* TAB 1: Lektionlar To'plami matching Screenshot 3 */}
         {currentTab === 'lektionen' && (
           <LektionenView
             lessons={lessons}
@@ -398,7 +393,6 @@ export default function App() {
           />
         )}
 
-        {/* TAB 2: O'yinlar & Grammatika matching Screenshot 4 */}
         {currentTab === 'games' && (
           <GamesHubView
             words={words}
@@ -407,7 +401,6 @@ export default function App() {
           />
         )}
 
-        {/* TAB 3: O'quvchilar reytingi matching Screenshot 5 */}
         {currentTab === 'leaderboard' && (
           <LeaderboardView
             users={users}
@@ -418,18 +411,23 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal 1: O'qituvchi Boshqaruv Paneli matching Screenshot 6 */}
       <AdminPanelModal
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
         users={users}
         lessons={lessons}
+        words={words}
         sessions={sessions}
         applications={applications}
         theme={theme}
         onCreateStudent={handleCreateStudent}
         onDeleteStudent={handleDeleteStudent}
         onUpdateStudent={handleUpdateStudent}
+        onUpdateLesson={handleUpdateLesson}
+        onToggleWordActive={handleToggleWordActive}
+        onDeleteWord={handleDeleteWord}
+        onCreateLesson={handleCreateLesson}
+        onDeleteLesson={handleDeleteLesson}
         onOpenAddWord={() => {
           setEditingWord(null);
           setIsAddWordOpen(true);
@@ -438,7 +436,6 @@ export default function App() {
         onApproveApplication={handleApproveApplication}
       />
 
-      {/* Modal 2: So'z qo'shish */}
       <AddWordModal
         isOpen={isAddWordOpen}
         onClose={() => {
@@ -457,7 +454,6 @@ export default function App() {
         }}
       />
 
-      {/* Modal 3: Matndan import qilish (Shu joytida) */}
       <TextFileImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
@@ -468,17 +464,13 @@ export default function App() {
         onImportWords={handleImportWords}
       />
 
-      {/* Modal 4: Ilova o'rnatish */}
       <InstallAppModal
         isOpen={isInstallModalOpen}
         onClose={() => setIsInstallModalOpen(false)}
         theme={theme}
       />
 
-      {/* Footer in Uzbek */}
-      <footer className={`relative z-10 border-t ${
-        theme === 'dark' ? 'border-slate-800/80 bg-[#0a0d14]/90 text-slate-400' : 'border-slate-200 bg-white/95 text-slate-600'
-      } py-5 px-4 text-xs transition-colors`}>
+      <footer className="relative z-10 border-t border-slate-800/80 bg-[#0a0d14]/90 text-slate-400 py-5 px-4 text-xs transition-colors">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
@@ -493,7 +485,7 @@ export default function App() {
 
           <div className="flex items-center gap-4 text-[11px] font-mono">
             <span>
-              Foydalanuvchi: <strong className={theme === 'dark' ? 'text-slate-200' : 'text-slate-900'}>{currentUser.name}</strong> ({currentUser.role === 'admin' ? "O'qituvchi" : `Daraja: ${currentUser.assignedLevel}`})
+              Foydalanuvchi: <strong className="text-slate-200">{currentUser.name}</strong> ({currentUser.role === 'admin' ? "O'qituvchi" : `Daraja: ${currentUser.assignedLevel}`})
             </span>
           </div>
         </div>
@@ -501,4 +493,3 @@ export default function App() {
     </div>
   );
 }
-
