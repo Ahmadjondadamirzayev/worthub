@@ -1,6 +1,0 @@
-{
-  "name": "Worthub.uz - Nemis tili lug'atini o'rganish platformasi",
-  "description": "Worthub.uz — Nemis tili darslari (Lektionen), interaktiv o'yinlar to'plami, A1-C2 darajalar va matnli fayldan import qilish imkoniyati.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
