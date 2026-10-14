@@ -52,3 +52,19 @@ body {
 .animate-shake {
   animation: shake 0.4s ease-in-out;
 }
+html,
+body {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important; /* iOS Safari auto-zoomni to'xtatadi */
+  }
+}
