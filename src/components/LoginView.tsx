@@ -121,32 +121,33 @@ export const LoginView: React.FC<LoginViewProps> = ({
         isDark ? 'bg-[#07090e] text-slate-100' : 'bg-[#f8fafc] text-slate-900'
       }`}
     >
-      {/* Top Left Badge */}
-      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-20 flex items-center gap-2">
-        <WorthubLogo size="sm" variant="mark-only" theme="dark" />
-        <span
-          className={`text-[11px] font-mono font-bold tracking-wider px-3 py-1.5 rounded-full border shadow-sm ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 text-amber-300'
-              : 'bg-white/90 border-slate-200 text-amber-700'
-          }`}
-        >
-          BUNDESREPUBLIK DEUTSCHLAND
-        </span>
-      </div>
+      {/* Responsive Top Bar */}
+      <div className="w-full max-w-4xl px-4 py-3 flex items-center justify-between z-20 absolute top-0 left-0 right-0">
+        <div className="flex items-center gap-2">
+          <WorthubLogo size="sm" variant="mark-only" theme="dark" />
+          <span
+            className={`text-[10px] sm:text-[11px] font-mono font-bold tracking-wider px-2 sm:px-3 py-1 rounded-full border shadow-sm ${
+              isDark
+                ? 'bg-slate-900/90 border-slate-800 text-amber-300'
+                : 'bg-white/90 border-slate-200 text-amber-700'
+            }`}
+          >
+            <span className="hidden sm:inline">BUNDESREPUBLIK </span>DEUTSCHLAND
+          </span>
+        </div>
 
-      {/* Top Right Language Selector & Status */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-2.5">
-        <LanguageSelector variant="dropdown" />
-        <div
-          className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-medium shadow-sm ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 text-emerald-400'
-              : 'bg-white/90 border-slate-200 text-emerald-600'
-          }`}
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Worthub Online</span>
+        <div className="flex items-center gap-2">
+          <LanguageSelector variant="dropdown" />
+          <div
+            className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-medium shadow-sm ${
+              isDark
+                ? 'bg-slate-900/90 border-slate-800 text-emerald-400'
+                : 'bg-white/90 border-slate-200 text-emerald-600'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Worthub Online</span>
+          </div>
         </div>
       </div>
 
@@ -191,7 +192,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               isDark ? 'text-slate-300' : 'text-slate-600'
             }`}
           >
-            Nemis tili so'z boyligi, grammatik darslar va interaktiv o'yinlar portali
+            {t('login_subtitle')}
           </p>
         </div>
 
@@ -423,7 +424,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
         }`}
       >
         <Info className="w-3.5 h-3.5" />
-        <span>Worthub.uz — O'zbekiston yoshlari uchun nemis tili o'rganish platformasi</span>
+        <span>Worthub.uz — {t('footer_tagline')}</span>
       </div>
     </div>
   );
