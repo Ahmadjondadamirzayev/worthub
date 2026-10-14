@@ -111,15 +111,18 @@ export default function App() {
     return DEFAULT_APPLICATIONS;
   });
 
-  // Active user session (Admin ahmadjon by default for instant control)
+  // Active user session (null by default so new phones/devices see login screen)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.id) return parsed;
+      }
     } catch (e) {
       // ignore
     }
-    return DEFAULT_USERS[0]; // ahmadjon
+    return null; // Require login instead of auto-logging everyone into admin!
   });
 
   // Navigation tab: 'lektionen' | 'games' | 'leaderboard'
@@ -247,13 +250,13 @@ export default function App() {
     setCurrentUser(null);
   };
 
-  // User Management (CRITICAL: "odamlarni o'chirish ishlasin")
+  // User Management
   const handleDeleteStudent = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
 
-    // If currently logged-in user was deleted, fallback to admin
+    // If currently logged-in user was deleted, log them out
     if (currentUser && currentUser.id === userId) {
-      setCurrentUser(users.find((u) => u.role === 'admin') || DEFAULT_USERS[0]);
+      setCurrentUser(null);
     }
   };
 
@@ -317,7 +320,7 @@ export default function App() {
     setTimeout(() => setToastNotification(null), 7000);
   };
 
-  // Lesson Handlers ("mavzuni men qo'shay harbir lektionnikini")
+  // Lesson Handlers
   const handleUpdateLesson = (id: string, updates: Partial<VocabularyLesson>) => {
     setLessons((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
@@ -386,7 +389,7 @@ export default function App() {
     setTimeout(() => setToastNotification(null), 5000);
   };
 
-  // Unauthenticated screen matching Screenshot 2
+  // Unauthenticated screen
   if (!currentUser) {
     return (
       <LoginView
@@ -432,8 +435,8 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {/* TAB 1: Lektionlar To'plami matching Screenshot 3 */}
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
+        {/* TAB 1: Lektionlar To'plami */}
         {currentTab === 'lektionen' && (
           <LektionenView
             lessons={lessons}
@@ -458,7 +461,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 2: O'yinlar & Grammatika matching Screenshot 4 */}
+        {/* TAB 2: O'yinlar & Grammatika */}
         {currentTab === 'games' && (
           <GamesHubView
             words={words}
@@ -467,7 +470,7 @@ export default function App() {
           />
         )}
 
-        {/* TAB 3: O'quvchilar reytingi matching Screenshot 5 */}
+        {/* TAB 3: O'quvchilar reytingi */}
         {currentTab === 'leaderboard' && (
           <LeaderboardView
             users={users}
@@ -478,7 +481,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal 1: O'qituvchi Boshqaruv Paneli matching Screenshot 6 */}
+      {/* Modal 1: O'qituvchi Boshqaruv Paneli */}
       <AdminPanelModal
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
@@ -523,7 +526,7 @@ export default function App() {
         }}
       />
 
-      {/* Modal 3: Matndan import qilish (Shu joytida) */}
+      {/* Modal 3: Matndan import qilish */}
       <TextFileImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
@@ -544,7 +547,7 @@ export default function App() {
       {/* Footer in Selected Language */}
       <footer className={`relative z-10 border-t ${
         theme === 'dark' ? 'border-slate-800/80 bg-[#0a0d14]/90 text-slate-400' : 'border-slate-200 bg-white/95 text-slate-600'
-      } py-5 px-4 text-xs transition-colors`}>
+      } py-5 px-4 mb-16 md:mb-0 text-xs transition-colors`}>
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
