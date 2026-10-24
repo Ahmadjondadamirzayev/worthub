@@ -26,8 +26,40 @@ import {
   UserSessionLog,
   StudentApplication,
 } from './types/german';
-import { api } from './utils/api';
 import { getBareGerman } from './utils/germanGrammar';
+
+// Safe backend sync helper (works seamlessly both on local server and on static hosts like Vercel)
+const safeFetch = async (url: string, options?: RequestInit) => {
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
+    });
+    return res.ok ? await res.json() : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const api = {
+  getUsers: () => safeFetch('/api/users'),
+  createUser: (user: UserAccount) => safeFetch('/api/users', { method: 'POST', body: JSON.stringify(user) }),
+  updateUser: (id: string, updates: Partial<UserAccount>) => safeFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  deleteUser: (id: string) => safeFetch(`/api/users/${id}`, { method: 'DELETE' }),
+  getLessons: () => safeFetch('/api/lessons'),
+  createLesson: (lesson: VocabularyLesson) => safeFetch('/api/lessons', { method: 'POST', body: JSON.stringify(lesson) }),
+  updateLesson: (id: string, updates: Partial<VocabularyLesson>) => safeFetch(`/api/lessons/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  deleteLesson: (id: string) => safeFetch(`/api/lessons/${id}`, { method: 'DELETE' }),
+  getWords: () => safeFetch('/api/words'),
+  saveWord: (word: WordItem) => safeFetch('/api/words', { method: 'POST', body: JSON.stringify(word) }),
+  importWords: (words: WordItem[]) => safeFetch('/api/words/batch', { method: 'POST', body: JSON.stringify({ words }) }),
+  deleteWord: (id: string) => safeFetch(`/api/words/${id}`, { method: 'DELETE' }),
+  getApplications: () => safeFetch('/api/applications'),
+  submitApplication: (app: StudentApplication) => safeFetch('/api/applications', { method: 'POST', body: JSON.stringify(app) }),
+  deleteApplication: (id: string) => safeFetch(`/api/applications/${id}`, { method: 'DELETE' }),
+  getSessions: () => safeFetch('/api/sessions'),
+  logSession: (session: UserSessionLog) => safeFetch('/api/sessions', { method: 'POST', body: JSON.stringify(session) }),
+};
 
 export const DEFAULT_STUDENT_USER: UserAccount = {
   id: 'guest-student',
@@ -86,7 +118,6 @@ export function App() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Repair any word that has no setId or invalid setId
           const cleaned: WordItem[] = parsed.map((w: WordItem) => ({
             ...w,
             setId: w.setId || 'lek-1',
@@ -94,7 +125,6 @@ export function App() {
             isActive: w.isActive !== false,
           }));
 
-          // Merge any DEFAULT_WORDS that might not be in cleaned
           const existingIds = new Set(cleaned.map((w) => w.id));
           const missingDefaults = DEFAULT_WORDS.filter((dw) => !existingIds.has(dw.id));
           return [...cleaned, ...missingDefaults];
@@ -111,9 +141,7 @@ export function App() {
     try {
       const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
     return DEFAULT_SESSIONS;
   });
 
@@ -122,13 +150,11 @@ export function App() {
     try {
       const stored = localStorage.getItem(APPS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
     return DEFAULT_APPLICATIONS;
   });
 
-  // Active user session (defaults to guest student user so any device enters immediately without login barrier!)
+  // Active user session (defaults to guest student user)
   const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -136,16 +162,14 @@ export function App() {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.id) return parsed;
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
     return DEFAULT_STUDENT_USER;
   });
 
   // Navigation tab: 'lektionen' | 'games' | 'leaderboard'
   const [currentTab, setCurrentTab] = useState<'lektionen' | 'games' | 'leaderboard'>('lektionen');
 
-  // Permanent Dark Mode (Qora rejim har doim yoqilgan)
+  // Permanent Dark Mode
   const theme = 'dark' as const;
 
   // Modals & Notifications state
@@ -163,9 +187,7 @@ export function App() {
       localStorage.setItem(THEME_STORAGE_KEY, 'dark');
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }, []);
 
   // Sync state to localStorage
@@ -351,7 +373,6 @@ export function App() {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     api.deleteUser(userId);
 
-    // If currently logged-in user was deleted, reset to student
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(DEFAULT_STUDENT_USER);
     }
@@ -398,7 +419,6 @@ export function App() {
   };
 
   const handleApproveApplication = (app: StudentApplication) => {
-    // Generate clean student login & password
     const autoUsername = app.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) + Math.floor(Math.random() * 90 + 10);
     const autoPassword = 'wort' + Math.floor(Math.random() * 900 + 100);
 
@@ -412,7 +432,6 @@ export function App() {
       isActive: true,
     });
 
-    // Remove application and show notification
     setApplications((prev) => prev.filter((a) => a.id !== app.id));
     api.deleteApplication(app.id);
     setToastNotification({
@@ -589,7 +608,7 @@ export function App() {
         )}
       </main>
 
-      {/* Modal 1: O'qituvchi Boshqaruv Paneli matching Screenshot 6 */}
+      {/* Modal 1: O'qituvchi Boshqaruv Paneli */}
       <AdminPanelModal
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
@@ -634,7 +653,7 @@ export function App() {
         }}
       />
 
-      {/* Modal 3: Matndan import qilish (Shu joytida) */}
+      {/* Modal 3: Matndan import qilish */}
       <TextFileImportModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
