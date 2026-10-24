@@ -20,7 +20,6 @@ import {
 import { UserAccount, CefrLevel } from '../types/german';
 import { CEFR_COLORS } from '../utils/germanGrammar';
 import { useLanguage } from '../utils/i18n';
-import { api } from '../utils/api';
 
 interface LeaderboardViewProps {
   users: UserAccount[];
@@ -58,46 +57,21 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
 
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminUsername.trim() || !adminPassword) {
+    const cleanUser = adminUsername.trim().toLowerCase();
+    const cleanPass = adminPassword.trim();
+
+    if (!cleanUser || !cleanPass) {
       setAdminError("Iltimos, login va parolni kiriting");
       return;
     }
     setAdminError('');
     setIsSubmitting(true);
 
-    try {
-      const res = await api.login(adminUsername.trim(), adminPassword);
-      if (res && res.user && res.user.role === 'admin') {
-        const adminAccount = res.user;
-        setLoginSuccess(true);
-        setTimeout(() => {
-          onAdminLogin(adminAccount);
-          setIsSubmitting(false);
-        }, 500);
-        return;
-      }
-    } catch (err) {
-      // Fallback to local check
-    }
-
-    const foundAdmin = users.find(
-      (u) =>
-        u.username.toLowerCase() === adminUsername.trim().toLowerCase() &&
-        u.password === adminPassword &&
-        u.role === 'admin'
-    );
-
-    if (foundAdmin) {
-      setLoginSuccess(true);
-      setTimeout(() => {
-        onAdminLogin(foundAdmin);
-        setIsSubmitting(false);
-      }, 500);
-    } else if (
-      adminUsername.trim().toLowerCase() === 'ahmadjon' &&
-      adminPassword === 'admin1'
-    ) {
-      const fallbackAdmin: UserAccount = {
+    // Direct check for master admin credentials (ahmadjon / admin1)
+    if (cleanUser === 'ahmadjon' && cleanPass === 'admin1') {
+      const adminAccount: UserAccount = users.find(
+        (u) => u.username.toLowerCase() === 'ahmadjon' && u.role === 'admin'
+      ) || {
         id: 'usr-1',
         username: 'ahmadjon',
         password: 'admin1',
@@ -111,11 +85,29 @@ export const LeaderboardView: React.FC<LeaderboardViewProps> = ({
         wordsCount: 1500,
         createdAt: '2026-09-01',
       };
+
       setLoginSuccess(true);
       setTimeout(() => {
-        onAdminLogin(fallbackAdmin);
+        onAdminLogin(adminAccount);
         setIsSubmitting(false);
-      }, 500);
+      }, 400);
+      return;
+    }
+
+    // Check against other created admin accounts
+    const foundAdmin = users.find(
+      (u) =>
+        u.username.toLowerCase() === cleanUser &&
+        u.password === cleanPass &&
+        u.role === 'admin'
+    );
+
+    if (foundAdmin) {
+      setLoginSuccess(true);
+      setTimeout(() => {
+        onAdminLogin(foundAdmin);
+        setIsSubmitting(false);
+      }, 400);
     } else {
       setAdminError("Login yoki parol noto'g'ri! Faqat admin kirishi mumkin.");
       setIsSubmitting(false);
