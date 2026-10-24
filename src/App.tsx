@@ -26,7 +26,12 @@ import {
   UserSessionLog,
   StudentApplication,
 } from './types/german';
-import { getBareGerman } from './utils/germanGrammar';
+
+// Strips leading German article ("der", "die", "das") from a string if present
+const getBareGerman = (german: string): string => {
+  if (!german) return '';
+  return german.replace(/^(der|die|das)\s+/i, '').trim();
+};
 
 // Safe backend sync helper (works seamlessly both on local server and on static hosts like Vercel)
 const safeFetch = async (url: string, options?: RequestInit) => {
