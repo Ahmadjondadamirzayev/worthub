@@ -8,6 +8,8 @@ import { AdminPanelModal } from './components/AdminPanelModal';
 import { AddWordModal } from './components/AddWordModal';
 import { TextFileImportModal } from './components/TextFileImportModal';
 import { InstallAppModal } from './components/InstallAppModal';
+import { StudentNameModal } from './components/StudentNameModal';
+import { sendTelegramNotification } from './utils/telegram';
 import { WorthubLogo } from './components/WorthubLogo';
 import { CheckCircle2, X } from 'lucide-react';
 import { useLanguage } from './utils/i18n';
@@ -146,7 +148,9 @@ export function App() {
     try {
       const stored = localStorage.getItem(SESSIONS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
     return DEFAULT_SESSIONS;
   });
 
@@ -155,11 +159,13 @@ export function App() {
     try {
       const stored = localStorage.getItem(APPS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
     return DEFAULT_APPLICATIONS;
   });
 
-  // Active user session (defaults to guest student user)
+  // Active user session (defaults to guest student user so any device enters immediately without login barrier!)
   const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -167,7 +173,9 @@ export function App() {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.id) return parsed;
       }
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
     return DEFAULT_STUDENT_USER;
   });
 
@@ -184,7 +192,95 @@ export function App() {
   const [editingWord, setEditingWord] = useState<WordItem | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [toastNotification, setToastNotification] = useState<{ title: string; message: string } | null>(null);
+
+  // Daily Activity Bonus (+15 XP)
+  useEffect(() => {
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const lastVisit = localStorage.getItem("worthub_last_visit_date");
+      if (lastVisit !== todayStr) {
+        localStorage.setItem("worthub_last_visit_date", todayStr);
+        const bonusXp = 15;
+        setCurrentUser((prev) => {
+          const newXp = (prev.xp || 0) + bonusXp;
+          const newStreak = (prev.streakDays || 0) + 1;
+          const updated = { ...prev, xp: newXp, streakDays: newStreak, lastActive: todayStr };
+          try {
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+          } catch (e) {}
+          setUsers((uList) =>
+            uList.map((u) => (u.id === prev.id ? { ...u, xp: newXp, streakDays: newStreak, lastActive: todayStr } : u))
+          );
+          setToastNotification({
+            title: "🔥 Kunlik faollik bonusi! (+15 ball)",
+            message: "Saytga kirganingiz uchun +15 ball berildi! Ketma-ket faollik: " + newStreak + " kun",
+          });
+          sendTelegramNotification(
+            "⚡ <b>Kunlik tashrif qayd etildi:</b>\n👤 O'quvchi: <b>" + prev.name + "</b>\n🎁 Kunlik bonus: <b>+15 XP</b>\n🔥 Ketma-ket kunlar: <b>" + newStreak + " kun</b>\n⏰ Vaqt: " + new Date().toLocaleString(),
+            { type: "visit", title: "Kunlik tashrif (+15 XP) - " + prev.name }
+          );
+          return updated;
+        });
+      }
+    } catch (e) {}
+  }, []);
+
+  // Award points from finished games
+  const handleAwardXp = (amount: number, gameTitle: string) => {
+    setCurrentUser((prev) => {
+      const newXp = (prev.xp || 0) + amount;
+      const updated = { ...prev, xp: newXp };
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      setUsers((uList) =>
+        uList.map((u) => (u.id === prev.id ? { ...u, xp: newXp } : u))
+      );
+      api.updateUser(prev.id, { xp: newXp });
+      setToastNotification({
+        title: "🎉 Tabriklaymiz! (+" + amount + " ball)",
+        message: gameTitle + " muvaffaqiyatli yakunlandi! Jami to'plangan ball: " + newXp + " XP",
+      });
+      sendTelegramNotification(
+        "🎮 <b>O'yin muvaffaqiyatli yakunlandi!</b>\n👤 O'quvchi: <b>" + prev.name + "</b>\n🎯 O'yin: <b>" + gameTitle + "</b>\n⭐ Berilgan ball: <b>+" + amount + " XP</b>\n🏆 Jami ball: <b>" + newXp + " XP</b>\n⏰ Vaqt: " + new Date().toLocaleString(),
+        { type: "game", title: gameTitle + " (+" + amount + " XP) - " + prev.name }
+      );
+      return updated;
+    });
+  };
+
+  // Student name registration modal handler
+  const handleSaveStudentName = (fullName: string, level: CefrLevel) => {
+    setCurrentUser((prev) => {
+      const updated: UserAccount = {
+        ...prev,
+        name: fullName,
+        assignedLevel: level,
+      };
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      setUsers((uList) => {
+        const exists = uList.find((u) => u.id === prev.id);
+        if (exists) {
+          return uList.map((u) => (u.id === prev.id ? { ...u, name: fullName, assignedLevel: level } : u));
+        } else {
+          return [updated, ...uList];
+        }
+      });
+      setToastNotification({
+        title: "👋 Xush kelibsiz!",
+        message: "Hurmatli " + fullName + ", ismingiz va darajangiz reytingda saqlandi.",
+      });
+      sendTelegramNotification(
+        "👤 <b>Yangi o'quvchi kirdi:</b>\n\nIsm-familiya: <b>" + fullName + "</b>\nDaraja: <b>" + level + "</b>\n⭐ Hozirgi ball: <b>" + (prev.xp || 0) + " XP</b>\n⏰ Vaqt: " + new Date().toLocaleString(),
+        { type: "name_set", title: "Yangi o'quvchi: " + fullName }
+      );
+      return updated;
+    });
+  };
 
   // Sync dark theme to HTML root
   useEffect(() => {
@@ -192,7 +288,9 @@ export function App() {
       localStorage.setItem(THEME_STORAGE_KEY, 'dark');
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
-    } catch (e) {}
+    } catch (e) {
+      // ignore
+    }
   }, []);
 
   // Sync state to localStorage
@@ -318,21 +416,6 @@ export function App() {
   }, []);
 
   // Auth Handlers
-  const handleLogin = (user: UserAccount) => {
-    setCurrentUser(user);
-    const newSession: UserSessionLog = {
-      id: `ses-${Date.now()}`,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      loginTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      ipOrDevice: navigator.userAgent.includes('Mobile') ? 'Mobil qurilma' : 'Chrome (Desktop)',
-    };
-    setSessions((prev) => [newSession, ...prev.slice(0, 20)]);
-    api.logSession(newSession);
-    setCurrentTab('lektionen');
-  };
-
   const handleAdminLogin = (adminUser: UserAccount) => {
     setCurrentUser(adminUser);
     try {
@@ -559,12 +642,13 @@ export function App() {
         theme="dark"
         onOpenAdminPanel={() => setIsAdminPanelOpen(true)}
         onOpenInstallApp={() => setIsInstallModalOpen(true)}
+        onOpenStudentModal={() => setIsStudentModalOpen(true)}
         onLogout={handleLogout}
       />
 
       {/* Main Container */}
       <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-24 md:pb-8">
-        {/* TAB 1: Lektionlar To'plami matching Screenshot 3 */}
+        {/* TAB 1: Lektionlar To'plami */}
         {currentTab === 'lektionen' && (
           <LektionenView
             lessons={lessons}
@@ -589,22 +673,23 @@ export function App() {
           />
         )}
 
-        {/* TAB 2: O'yinlar & Grammatika matching Screenshot 4 */}
+        {/* TAB 2: O'yinlar & Grammatika */}
         {currentTab === 'games' && (
           <GamesHubView
             words={words}
             lessons={lessons}
             theme={theme}
+            onAwardXp={handleAwardXp}
           />
         )}
 
-        {/* TAB 3: O'quvchilar reytingi with Admin switcher at bottom */}
+        {/* TAB 3: O'quvchilar reytingi */}
         {currentTab === 'leaderboard' && (
           <LeaderboardView
             users={users}
             currentUser={currentUser}
             theme={theme}
-            onOpenAddStudent={() => setIsAdminPanelOpen(true)}
+            onOpenAddStudent={() => setIsStudentModalOpen(true)}
             onGoToGames={() => setCurrentTab('games')}
             onAdminLogin={handleAdminLogin}
             onLogoutToStudent={handleLogoutToStudent}
@@ -669,14 +754,24 @@ export function App() {
         onImportWords={handleImportWords}
       />
 
-      {/* Modal 4: Ilova o'rnatish */}
+      {/* Modal 4: Student Name & Login modal */}
+      <StudentNameModal
+        isOpen={isStudentModalOpen}
+        onClose={() => setIsStudentModalOpen(false)}
+        currentName={currentUser.name}
+        currentLevel={currentUser.assignedLevel}
+        onSave={handleSaveStudentName}
+        theme={theme}
+      />
+
+      {/* Modal 5: Ilova o'rnatish */}
       <InstallAppModal
         isOpen={isInstallModalOpen}
         onClose={() => setIsInstallModalOpen(false)}
         theme={theme}
       />
 
-      {/* Footer in Selected Language */}
+      {/* Footer */}
       <footer className={`relative z-10 border-t ${
         theme === 'dark' ? 'border-slate-800/80 bg-[#0a0d14]/90 text-slate-400' : 'border-slate-200 bg-white/95 text-slate-600'
       } py-5 px-4 mb-16 md:mb-0 text-xs transition-colors`}>
