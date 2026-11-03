@@ -1,0 +1,311 @@
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowLeft,
+  Timer,
+  Zap,
+  Flame,
+  RotateCw,
+  Trophy,
+  Volume2,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react';
+import { WordItem, CefrLevel } from '../../types/german';
+import { speakGerman } from '../../utils/speech';
+import { useLanguage } from '../../utils/i18n';
+import { getWordTranslation } from '../../utils/wordTranslationHelper';
+import { getCleanShortTranslation } from '../../utils/wordUtils';
+import { getFullGermanWord } from '../../utils/germanGrammar';
+
+interface BlitzWortGameProps {
+  words: WordItem[];
+  currentLevel: CefrLevel | 'all';
+  onBack: () => void;
+  onAwardXp?: (amount: number, gameTitle: string) => void;
+  theme?: 'dark' | 'light';
+}
+
+interface Question {
+  targetWord: WordItem;
+  promptText: string;
+  options: { text: string; isCorrect: boolean }[];
+}
+
+export const BlitzWortGame: React.FC<BlitzWortGameProps> = ({
+  words,
+  currentLevel,
+  onBack,
+  onAwardXp,
+  theme = 'dark',
+}) => {
+  const { t, language } = useLanguage();
+  const isDark = theme === 'dark';
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [isActive, setIsActive] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
+  const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [maxStreak, setMaxStreak] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+
+  const getFilteredWords = () => {
+    const filtered =
+      currentLevel === 'all'
+        ? words
+        : words.filter((w) => w.level === currentLevel);
+    return filtered.length >= 4 ? filtered : words;
+  };
+
+  const generateQuestion = (pool: WordItem[]): Question => {
+    const targetIdx = Math.floor(Math.random() * pool.length);
+    const target = pool[targetIdx];
+
+    // Pick 3 distractors
+    const otherWords = pool.filter((w) => w.id !== target.id);
+    const shuffledOthers = [...otherWords].sort(() => Math.random() - 0.5).slice(0, 3);
+
+    const deLabel = getFullGermanWord(target.german, target.article);
+
+    const options = [
+      { text: getCleanShortTranslation(getWordTranslation(target, language)), isCorrect: true },
+      ...shuffledOthers.map((o) => ({ text: getCleanShortTranslation(getWordTranslation(o, language)), isCorrect: false })),
+    ].sort(() => Math.random() - 0.5);
+
+    return {
+      targetWord: target,
+      promptText: deLabel,
+      options,
+    };
+  };
+
+  const startGame = () => {
+    const pool = getFilteredWords();
+    setTimeLeft(60);
+    setScore(0);
+    setStreak(0);
+    setMaxStreak(0);
+    setIsFinished(false);
+    setIsActive(true);
+    setFeedback(null);
+    setCurrentQuestion(generateQuestion(pool));
+  };
+
+  // Timer countdown
+  useEffect(() => {
+    let timer: any;
+    if (isActive && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            setIsActive(false);
+            setIsFinished(true);
+          if (onAwardXp) onAwardXp(40, 'Blitz-Wort (60 soniya)');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isActive, timeLeft]);
+
+  // Audio prompt on new question
+  useEffect(() => {
+    if (currentQuestion && isActive) {
+      speakGerman(currentQuestion.promptText);
+    }
+  }, [currentQuestion, isActive]);
+
+  const handleSelectOption = (isCorrect: boolean) => {
+    if (!isActive || !currentQuestion || feedback) return;
+
+    if (isCorrect) {
+      setFeedback('correct');
+      const addedPoints = 100 + streak * 20;
+      setScore((prev) => prev + addedPoints);
+      const newStreak = streak + 1;
+      setStreak(newStreak);
+      if (newStreak > maxStreak) setMaxStreak(newStreak);
+    } else {
+      setFeedback('wrong');
+      setStreak(0);
+    }
+
+    setTimeout(() => {
+      setFeedback(null);
+      const pool = getFilteredWords();
+      setCurrentQuestion(generateQuestion(pool));
+    }, 400);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Top Bar */}
+      <div className={`flex items-center justify-between gap-4 p-4 rounded-2xl border transition-colors ${
+        isDark ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-xs'
+      }`}>
+        <button
+          onClick={onBack}
+          className={`flex items-center gap-2 text-xs font-medium transition-colors cursor-pointer ${
+            isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>{t('games_back_btn')}</span>
+        </button>
+
+        <div className="flex items-center gap-5 text-xs">
+          <div className="flex items-center gap-1.5">
+            <Timer className={`w-4 h-4 ${timeLeft <= 10 ? 'text-rose-500 animate-pulse' : 'text-amber-500'}`} />
+            <span className={`font-mono text-sm font-bold ${timeLeft <= 10 ? 'text-rose-500' : 'text-amber-500'}`}>
+              {timeLeft}s
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Flame className="w-4 h-4 text-orange-500" />
+            <span className="font-mono text-orange-500 font-bold">{streak}x</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-yellow-500" />
+            <span className={`font-mono font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{score} {t('score')}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Game Ready Screen */}
+      {!isActive && !isFinished && (
+        <div className={`rounded-2xl border p-8 text-center space-y-6 ${
+          isDark ? 'bg-[#0f1422] border-slate-800 text-white' : 'bg-white border-slate-200 shadow-xl text-slate-900'
+        }`}>
+          <div className="inline-flex p-4 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
+            <Zap className="w-10 h-10" />
+          </div>
+          <div className="space-y-2">
+            <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {language === 'ru' ? 'Блиц-Слово (60 секунд)' : language === 'en' ? 'Blitz Word (60 seconds)' : 'Blitz-Wort (60 soniya)'}
+            </h2>
+            <p className={`text-xs max-w-md mx-auto ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {language === 'ru' ? 'Гонка на время! Выберите как можно больше правильных переводов за 60 секунд. За серии правильных ответов начисляются комбо-баллы!' : language === 'en' ? 'Race against time! Match as many translations as possible in 60 seconds. Build combos for bonus points!' : "Vaqt poygasi! 60 soniya ichida eng ko'p nemischa so'zlarning to'g'ri tarjimasini toping."}
+            </p>
+          </div>
+          <button
+            onClick={startGame}
+            className="px-8 py-3 bg-gradient-to-r from-red-600 via-red-500 to-amber-500 hover:opacity-95 text-white font-bold text-sm rounded-xl shadow-lg shadow-red-600/25 transition-all cursor-pointer"
+          >
+            {t('start')} Blitz (60s)!
+          </button>
+        </div>
+      )}
+
+      {/* Active Question Box */}
+      {isActive && currentQuestion && (
+        <div className="space-y-4">
+          <div className={`rounded-2xl border p-8 text-center relative overflow-hidden shadow-2xl transition-colors ${
+            isDark ? 'bg-gradient-to-br from-slate-900 to-[#101628] border-slate-800 text-white' : 'bg-white border-slate-200 shadow-xl text-slate-900'
+          }`}>
+            {/* German Flag Accent Line */}
+            <div className="absolute top-0 left-0 right-0 h-1 flex">
+              <div className="w-1/3 bg-[#151515]" />
+              <div className="w-1/3 bg-[#de0000]" />
+              <div className="w-1/3 bg-[#ffce00]" />
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className={`text-[11px] font-mono uppercase tracking-widest ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t('lek_col_word')}:</span>
+              <button
+                onClick={() => speakGerman(currentQuestion.promptText)}
+                className="p-1 rounded-full text-amber-500 hover:bg-amber-400/10 cursor-pointer"
+                title={t('listen')}
+              >
+                <Volume2 className="w-4 h-4" />
+              </button>
+            </div>
+
+            <h3 className={`text-3xl sm:text-4xl font-extrabold tracking-tight font-sans ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {currentQuestion.promptText}
+            </h3>
+
+            {currentQuestion.targetWord.plural && (
+              <p className={`text-xs mt-1 font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {t('lek_col_plural')}: {currentQuestion.targetWord.plural}
+              </p>
+            )}
+          </div>
+
+          {/* Options Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {currentQuestion.options.map((opt, i) => (
+              <button
+                key={i}
+                onClick={() => handleSelectOption(opt.isCorrect)}
+                className={`p-4 rounded-xl text-left border font-medium text-sm transition-all cursor-pointer flex items-center justify-between group shadow-sm ${
+                  isDark
+                    ? 'bg-slate-900/90 hover:bg-slate-800 border-slate-800 hover:border-amber-500/50 text-slate-100'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-amber-500/50 text-slate-900'
+                }`}
+              >
+                <span>{opt.text}</span>
+                <span className={`text-xs font-mono group-hover:text-amber-500 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                  [{i + 1}]
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Finished Result Screen */}
+      {isFinished && (
+        <div className={`rounded-2xl border p-8 text-center space-y-6 ${
+          isDark ? 'bg-[#0f1422] border-slate-800 text-white' : 'bg-white border-slate-200 shadow-xl text-slate-900'
+        }`}>
+          <div className="inline-flex p-4 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
+            <Trophy className="w-12 h-12" />
+          </div>
+          <div className="space-y-1">
+            <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {language === 'ru' ? 'Время вышло! Блиц завершён' : language === 'en' ? "Time's up! Blitz completed" : 'Vaqt tugadi! Blitz yakunlandi'}
+            </h2>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {language === 'ru' ? 'Ваш отличный результат за 60 секунд тренировки:' : language === 'en' ? 'Your great score in 60 seconds of fast training:' : "60 soniyalik shiddatli mashg'ulotda qayd etgan natijangiz:"}
+            </p>
+          </div>
+
+          <div className={`grid grid-cols-2 gap-4 max-w-xs mx-auto p-4 rounded-xl border ${
+            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div>
+              <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t('game_total_score')}</div>
+              <div className="text-2xl font-bold text-amber-500 font-mono">{score}</div>
+            </div>
+            <div>
+              <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t('game_max_streak')}</div>
+              <div className="text-2xl font-bold text-orange-500 font-mono">{maxStreak}x</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center gap-4 pt-2">
+            <button
+              onClick={startGame}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-600 to-amber-500 hover:opacity-95 text-white font-semibold text-xs rounded-xl shadow-lg shadow-red-600/20 cursor-pointer"
+            >
+              <RotateCw className="w-4 h-4" />
+              <span>{t('game_play_again')}</span>
+            </button>
+            <button
+              onClick={onBack}
+              className={`px-5 py-2.5 text-xs rounded-xl cursor-pointer ${
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200'
+              }`}
+            >
+              {t('game_back_to_menu')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

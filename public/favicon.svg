@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="iibGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF7AA" />
+      <stop offset="30%" stop-color="#F59E0B" />
+      <stop offset="70%" stop-color="#D97706" />
+      <stop offset="100%" stop-color="#78350F" />
+    </linearGradient>
+    <radialGradient id="iibShieldDisc" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#0B2545" />
+      <stop offset="70%" stop-color="#06162B" />
+      <stop offset="100%" stop-color="#02060D" />
+    </radialGradient>
+  </defs>
+  <!-- Qilich dasta boshlanishi -->
+  <circle cx="50" cy="5" r="3.2" fill="url(#iibGold)" />
+  <rect x="48.5" y="7" width="3" height="6" fill="#FEF08A" />
+  <path d="M37 13 C43 14.5 48 13.5 50 14 C52 13.5 57 14.5 63 13 L60 16 C54 16.5 50 16.5 46 16.5 Z" fill="url(#iibGold)" />
+  <!-- Qilich uchi -->
+  <path d="M48 83 L50 97 L52 83 Z" fill="#FFFFFF" stroke="#94A3B8" stroke-width="0.5" />
+  <!-- Asosiy Qalqon -->
+  <path d="M50 16 L78 22 C78 48 68 73 50 87 C32 73 22 48 22 22 L50 16 Z" fill="url(#iibShieldDisc)" stroke="url(#iibGold)" stroke-width="3" />
+  <!-- 8 qirrali yulduz -->
+  <rect x="45" y="24" width="10" height="10" rx="0.8" fill="#FEF08A" />
+  <rect x="45" y="24" width="10" height="10" rx="0.8" transform="rotate(45 50 29)" fill="#FEF08A" />
+  <!-- W Monogrammasi -->
+  <path d="M32 37 L39 52 L50 41 L61 52 L68 37" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M32 37 L39 52 L50 41 L61 52 L68 37" stroke="url(#iibGold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- O'zbekiston bayrog'i lentalari -->
+  <path d="M26 77 C34 81 42 82 50 82 C58 82 66 81 74 77 L75 80 C67 84 59 85 50 85 C41 85 33 84 25 80 Z" fill="#0099B5" />
+  <path d="M25 80 C33 84 41 85 50 85 C59 85 67 84 75 80 L76 83 C68 87 59 88 50 88 C41 88 32 87 24 83 Z" fill="#FFFFFF" />
+  <path d="M24 83 C32 87 41 88 50 88 C59 88 68 87 76 83 L77 86 C69 90 60 91 50 91 C40 91 31 90 23 86 Z" fill="#1EB53A" />
+</svg>
